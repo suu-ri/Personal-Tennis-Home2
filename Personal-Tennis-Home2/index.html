@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal Tennis Home</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Personal Tennis Home</h1>
+        
+        <!-- Training Log部分 -->
+        <section id="training-log">
+            <h2>Training Log</h2>
+            <form id="training-form">
+                <label for="date">Date:</label>
+                <input type="date" id="date" required>
+                <label for="duration">Training duration (minutes):</label>
+                <input type="number" id="duration" required>
+                <label for="notes">Feelings:</label>
+                <textarea id="notes" rows="4" required></textarea>
+                <button type="submit">Add Record/Save</button>
+            </form>
+            <h3>Training Records</h3>
+            <ul id="log-list"></ul>
+        </section>
+
+        <!-- Video Favorites部分 -->
+        <section id="video-favorites">
+            <h2>Video Favorites</h2>
+            <form id="video-form">
+                <label for="video-title">Video title:</label>
+                <input type="text" id="video-title" required>
+                <label for="video-url">Video link:</label>
+                <input type="url" id="video-url" required>
+                <button type="submit">Add Video/Save</button>
+            </form>
+            <h3>Favorite Videos</h3>
+            <ul id="video-list"></ul>
+        </section>
+    </div>
+
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, getDoc, deleteDoc, doc, updateDoc, query, orderBy, onSnapshot } 
+        from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+        
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+        apiKey: "AIzaSyCTZymBVvxpUHAl7WQzTdXoPt2l7gIoobY",
+        authDomain: "personal-tennis-home2.firebaseapp.com",
+        projectId: "personal-tennis-home2",
+        storageBucket: "personal-tennis-home2.appspot.com",
+        messagingSenderId: "1071782964777",
+        appId: "1:1071782964777:web:66e9ebdf6f1f57f70af638"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        // 初始化 Firestore
+        const db = getFirestore(app);
+
+        // 在这里定义 editIndex 和 editVideoIndex
+        let editIndex = null;
+        let editVideoIndex = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const trainingForm = document.getElementById('training-form');
+            const logList = document.getElementById('log-list');
+            const videoForm = document.getElementById('video-form');
+            const videoList = document.getElementById('video-list');
+            // let editIndex = null;
+            // let editVideoIndex = null;
+
+            // 加载保存的训练日志和视频收藏
+            loadLogs();
+            loadVideos();
+
+            // 监听训练日志表单提交事件
+            trainingForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (editIndex !== null) {
+                    updateLog(editIndex);
+                } else {
+                    addLog();
+                }
+            });
+
+            // 监听视频收藏表单提交事件
+            videoForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (editVideoIndex !== null) {
+                    updateVideo(editVideoIndex);
+                } else {
+                    addVideo();
+                }
+            });
+
+            // 训练日志相关函数
+            function addLog() {
+                const date = document.getElementById('date').value;
+                const duration = document.getElementById('duration').value;
+                const notes = document.getElementById('notes').value;
+
+                if (date && duration && notes) {
+                    const log = { date, duration, notes };
+                    saveLog(log);
+                }
+            }
+
+            function saveLog(log) {
+                addDoc(collection(db, "tennisLogs"), log)
+                    .then(() => {
+                        console.log("Log successfully added!");
+                        refreshLogs();
+                        trainingForm.reset();
+                    })
+                    .catch((error) => {
+                        console.error("Error adding log: ", error);
+                    });
+            }
+
+            function loadLogs() {
+                const q = query(collection(db, "tennisLogs"), orderBy("date", "desc"));
+                getDocs(q)
+                    .then((querySnapshot) => {
+                        logList.innerHTML = '';
+                        querySnapshot.forEach((doc) => {
+                            appendLog(doc.data(), doc.id);
+                        });
+                    })
+                    .catch((error) => {
+                        console.error("Error getting logs: ", error);
+                    });
+            }
+
+            function appendLog(log, id) {
+                const li = document.createElement('li');
+                li.innerHTML = `<strong>Date:</strong> ${log.date} <br>
+                                <strong>Duration:</strong> ${log.duration} minutes <br>
+                                <strong>Feelings:</strong> ${log.notes}
+                                <button class="edit" onclick="editLog('${id}')">Edit</button>
+                                <button class="delete" onclick="deleteLog('${id}')">Delete</button>`;
+                logList.appendChild(li);
+            }
+
+            function updateLog(id) {
+                const date = document.getElementById('date').value;
+                const duration = document.getElementById('duration').value;
+                const notes = document.getElementById('notes').value;
+
+                updateDoc(doc(db, "tennisLogs", id), {
+                    date: date,
+                    duration: duration,
+                    notes: notes
+                })
+                .then(() => {
+                    console.log("Log successfully updated!");
+                    trainingForm.reset();
+                    editIndex = null; // 清空编辑索引
+                })
+                .catch((error) => {
+                    console.error("Error updating log: ", error);
+                });
+            }
+
+            function deleteLog(id) {
+                deleteDoc(doc(db, "tennisLogs", id))
+                    .then(() => {
+                        console.log("Log successfully deleted!");
+                        refreshLogs();
+                    })
+                    .catch((error) => {
+                        console.error("Error removing log: ", error);
+                    });
+            }
+
+            function refreshLogs() {
+                loadLogs();
+            }
+
+            // 视频收藏相关函数
+            function addVideo() {
+                const title = document.getElementById('video-title').value;
+                const url = document.getElementById('video-url').value;
+
+                if (title && url) {
+                    const video = { title, url };
+                    saveVideo(video);
+                }
+            }
+
+            function saveVideo(video) {
+                addDoc(collection(db, "tennisVideos"), video)
+                    .then(() => {
+                        console.log("Video successfully added!");
+                        refreshVideos();
+                        videoForm.reset();
+                    })
+                    .catch((error) => {
+                        console.error("Error adding video: ", error);
+                    });
+            }
+
+            function loadVideos() {
+                getDocs(collection(db, "tennisVideos"))
+                    .then((querySnapshot) => {
+                        videoList.innerHTML = '';
+                        querySnapshot.forEach((doc) => {
+                            appendVideo(doc.data(), doc.id);
+                        });
+                    })
+                    .catch((error) => {
+                        console.error("Error getting videos: ", error);
+                    });
+            }
+
+            function appendVideo(video, id) {
+                const li = document.createElement('li');
+                li.innerHTML = `<a href="${video.url}" target="_blank">${video.title}</a>
+                                <button class="edit" onclick="editVideo('${id}')">Edit</button>
+                                <button class="delete" onclick="deleteVideo('${id}')">Delete</button>`;
+                videoList.appendChild(li);
+            }
+
+            function updateVideo(id) {
+                const title = document.getElementById('video-title').value;
+                const url = document.getElementById('video-url').value;
+
+                updateDoc(doc(db, "tennisVideos", id), {
+                    title: title,
+                    url: url
+                })
+                .then(() => {
+                    console.log("Video successfully updated!");
+                    videoForm.reset();
+                    editVideoIndex = null; // 清空编辑索引
+                })
+                .catch((error) => {
+                    console.error("Error updating video: ", error);
+                });
+            }
+
+            function deleteVideo(id) {
+                deleteDoc(doc(db, "tennisVideos", id))
+                    .then(() => {
+                        console.log("Video successfully deleted!");
+                        refreshVideos();
+                    })
+                    .catch((error) => {
+                        console.error("Error removing video: ", error);
+                    });
+            }
+
+            function refreshVideos() {
+                loadVideos();
+            }
+
+            // 将函数挂载到window对象，以便在HTML中调用
+            window.editLog = editLog;
+            window.deleteLog = deleteLog;
+            window.editVideo = editVideo;
+            window.deleteVideo = deleteVideo;
+
+            // 监听训练日志变化
+            const logUnsubscribe = onSnapshot(
+                query(collection(db, "tennisLogs"), orderBy("date", "desc")),
+                (querySnapshot) => {
+                    logList.innerHTML = '';
+                    querySnapshot.forEach((doc) => {
+                        appendLog(doc.data(), doc.id);
+                    });
+                },
+                (error) => {
+                    console.error("Error getting logs: ", error);
+                }
+            );
+
+            // 监听视频收藏变化 
+            const videoUnsubscribe = onSnapshot(
+                collection(db, "tennisVideos"),
+                (querySnapshot) => {
+                    videoList.innerHTML = '';
+                    querySnapshot.forEach((doc) => {
+                        appendVideo(doc.data(), doc.id);
+                    });
+                },
+                (error) => {
+                    console.error("Error getting videos: ", error);
+                }
+            );
+
+        });
+
+        // 编辑日志
+        window.editLog = function(id) {
+            getDoc(doc(db, "tennisLogs", id))
+                .then((docSnap) => {
+                    if (docSnap.exists()) {
+                        const log = docSnap.data();
+                        document.getElementById('date').value = log.date;
+                        document.getElementById('duration').value = log.duration;
+                        document.getElementById('notes').value = log.notes;
+                        editIndex = id;
+                    } else {
+                        console.log("No such document!");
+                    }
+                })
+                .catch((error) => {
+                    console.error("Error getting log: ", error);
+                });
+        };
+
+        // 编辑视频
+        window.editVideo = function(id) {
+            getDoc(doc(db, "tennisVideos", id))
+                .then((docSnap) => {
+                    if (docSnap.exists()) {
+                        const video = docSnap.data();
+                        document.getElementById('video-title').value = video.title;
+                        document.getElementById('video-url').value = video.url;
+                        editVideoIndex = id;
+                    } else {
+                        console.log("No such document!");
+                    }
+                })
+                .catch((error) => {
+                    console.error("Error getting video: ", error);
+                });
+        };
+    </script>
+</body>
+</html>
